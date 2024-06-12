@@ -1,46 +1,47 @@
-import { NextFunction, Request, Response } from "express"
+import { NextFunction, Request, Response } from "express";
 import createHttpError from "http-errors";
 import userModel from "./userModel";
 import bcrypt from "bcrypt";
 import { URLSearchParams } from "url";
+import { sign } from "jsonwebtoken";
+import { config } from "../config/config";
 
-const createUser = async (req: Request,res: Response,next: NextFunction) => {
+const createUser = async (req: Request, res: Response, next: NextFunction) => {
+  const { name, email, password } = req.body;
 
-    const { name, email, password } = req.body;
+  if (!name || !email || !password) {
+    const error = createHttpError(400, "All fields are mandatory");
 
-     if(!name || !email || !password) {
+    return next(error);
+  }
 
-        const error = createHttpError(400,'All fields are mandatory');
+  //Database call
 
-        return next(error);
+  const user = await userModel.findOne({ email });
+  if (user) {
+    const error = createHttpError(400, "User already exist with this email.");
+    return next(error);
+  }
 
-     }
+  //password hash
 
-     //Database call
+  const hashedPassword = await bcrypt.hash(password, 10);
 
-     const user = await userModel.findOne({ email });
-     if(user) {
-        const error = createHttpError(400,"User already exist with this email.");
-        return next(error);
-     }
+  const newUser = await userModel.create({
+    name,
+    email,
+    password: hashedPassword,
+  });
 
-     //password hash
+  //Token generation JWT
 
-     const hashedPassword = await bcrypt.hash(password,10);
+  const token = sign({ sub: newUser._id }, config.jwtSecret as string, {
+    expiresIn: "7d",
+  });
 
-     const newUser = await userModel.create({
-        name,
-        email,
-        password : hashedPassword,
-     });
-
-     //Token generation
-     
-
-
-    res.status(200).json({
-        message:"User created",
-    });
+  res.status(200).json({
+    accessToken: token,
+  });
 };
 
 export { createUser };
