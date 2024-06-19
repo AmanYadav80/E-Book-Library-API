@@ -5,10 +5,11 @@ import cloudinary from "../config/cloudinary";
 import createHttpError from "http-errors";
 import bookModel from "./bookModel";
 import { AuthRequest } from "../middlewares/authenticate";
+
 const createBook = async (req: Request, res: Response, next: NextFunction) => {
   const { title, genre } = req.body;
   const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-
+  // console.log("THis is the files in create book",files);
   try {
     //image upload
     const coverImageMimeType = files.coverImage[0].mimetype.split("/").at(-1);
@@ -33,10 +34,10 @@ const createBook = async (req: Request, res: Response, next: NextFunction) => {
     const bookFileUploadResult = await cloudinary.uploader.upload(
       bookFilePath,
       {
-        resource_type: "raw",
-        filename_override: bookFileName,
-        folder: "book-pdfs",
-        format: "pdf",
+        resource_type:"raw",
+        filename_override:bookFileName,
+        folder:"book-pdfs",
+        format:"pdf",
       }
     );
 
@@ -57,9 +58,6 @@ const createBook = async (req: Request, res: Response, next: NextFunction) => {
   } catch {
     return next(createHttpError(500, "Error uploading the file"));
   }
-  res.json({
-    message: "Book created",
-  });
 };
 
 const updateBook = async (req: Request, res: Response, next: NextFunction) => {
@@ -81,8 +79,16 @@ const updateBook = async (req: Request, res: Response, next: NextFunction) => {
   // check if image field is exists.
 
   const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+  // console.log("This is the files in update book",files);
   let completeCoverImage = "";
   if (files.coverImage) {
+    //deleting the existing coverImage from the cloudinary cloud
+    const coverFileSplits = book.coverImage.split("/");
+    const coverImagePublicId =
+      coverFileSplits.at(-2) + "/" + coverFileSplits.at(-1)?.split(".").at(-2);
+    await cloudinary.uploader.destroy(coverImagePublicId);
+
+    //accessing new cover image
     const filename = files.coverImage[0].filename;
     const converMimeType = files.coverImage[0].mimetype.split("/").at(-1);
     // send files to cloudinary
@@ -104,6 +110,13 @@ const updateBook = async (req: Request, res: Response, next: NextFunction) => {
   // check if file field is exists.
   let completeFileName = "";
   if (files.file) {
+    //deleting the existing file from the cloudinary
+    const bookFileSplits = book.file.split("/");
+    const bookFilePublicId =
+      bookFileSplits.at(-2) + "/" + bookFileSplits.at(-1);
+    await cloudinary.uploader.destroy(bookFilePublicId, {
+      resource_type: "raw",
+    });
     const bookFilePath = path.resolve(
       __dirname,
       "../../public/data/uploads/" + files.file[0].filename
@@ -178,7 +191,6 @@ const deleteBook = async (req: Request, res: Response, next: NextFunction) => {
   if (book.author.toString() !== _req.userId) {
     return next(createHttpError(403, "You can not update others book."));
   }
-  
 
   const coverFileSplits = book.coverImage.split("/");
   const coverImagePublicId =
